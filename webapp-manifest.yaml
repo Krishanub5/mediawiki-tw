@@ -1,0 +1,113 @@
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webapp
+
+---
+
+# MariaDB Deployment and Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb-deployment
+  namespace: webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+        - name: mariadb
+          image: mariadb:latest
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: your-root-password
+            - name: MYSQL_DATABASE
+              value: your-database-name
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mariadb-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mariadb-storage
+          persistentVolumeClaim:
+            claimName: mariadb-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-service
+  namespace: webapp
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - protocol: TCP
+      port: 3306
+  clusterIP: None
+
+---
+
+# Apache2 Deployment and Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apache2-deployment
+  namespace: webapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: apache2
+  template:
+    metadata:
+      labels:
+        app: apache2
+    spec:
+      containers:
+        - name: apache2
+          image: httpd:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: DB_HOST
+              value: mariadb-service.webapp.svc.cluster.local  # DNS name of the MariaDB service
+            - name: DB_USER
+              value: your-db-username
+            - name: DB_PASSWORD
+              value: your-db-password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache2-service
+  namespace: webapp
+spec:
+  selector:
+    app: apache2
+  ports:
+    - protocol: TCP
+      port: 80
+  type: LoadBalancer
+
+---
+
+# MariaDB Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadb-pvc
+  namespace: webapp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi  # Adjust the storage size as needed
